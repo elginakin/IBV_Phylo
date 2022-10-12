@@ -1,0 +1,146 @@
+---
+title: "GISAID_Metadata_Clean"
+format: html
+editor: visual
+---
+
+# QUARTO Help
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+
+# GISAID Database Metadata Cleaning
+
+The goal of this workflow is to provide end-to-end documentation for analyzing large numbers of influenza sequences from GISAID. 
+
+
+# Yamagata Sequences 
+
+## 1. Downloading Sequences 
+Yamagata sequences
+Sequences were accessed on GISAID 10/12/2022 using the following criteria: 
+
+* EPI Flu 
+* Type: B
+* Lineage: Yamagata
+* Host: Human
+* Location: ALL 
+* Required Segments: All but HE and P3
+* Only Complete Segments 
+* Downloaded: Isolates as XLS 
+* Downloaded Sequences (DNA) as FASTA - Segments Selected: PBs, PB1, PA, HA, NP, NA, MP NS with naming schema: Isolate ID | Isolate name  Segment. Example segment fasta header: ">EPI_ISL_79484|A/DARWIN/36/2010|NP"
+
+Total Isolates: 7252 included in the metadata table.
+
+
+## 2. Import Metadata 
+Metadata is in xls format. 
+
+```{r read in excel and write to csv}
+
+library(readxl)
+yam_meta.xls <- "./IBV_YAMAGATA_FULL-Seq_Database-ALL/GISAID_B_Yamagata_Meta_10122022.xls"
+yam_meta <- read_excel(yam_meta.xls)
+
+write.csv(yam_meta, './IBV_YAMAGATA_FULL-Seq_Database-ALL/IBV_Yam_filtered_database/yam_meta.csv') #write to csv for later access if needed. I dont trust xls.
+
+```
+
+
+```{r data summary }
+
+Pass_hist <- unique(yam_meta$Passage_History) #list of all unique passage history entries
+Pass_hist
+
+paste("There are", length(Pass_hist), "unique entries in Passage history") #total unique entries in passage 
+
+```
+
+We want to keep all entries which have been directly sequence prior to cell passage. The GISAID dataset is messy and contains several different entries in the "Passage History" field which denote it as a clinical sequence (directly from patient). We want to filter any entries by: 
+
+* "Original"
+* "original"
+* "Direct sequencing"  
+* "Original Specimen"  
+* "Clinical specimen"
+
+```{r meta filtering}
+
+library(tidyverse)
+library(dplyr)
+library(stringr)
+
+#define filter conditions for original samples 
+original <- c(
+  "Original",
+  "original",
+  "Direct sequencing",  
+  "Original Specimen", 
+  "Clinical specimen"
+)
+
+yam_meta_orig <-yam_meta %>% 
+  filter(Passage_History %in% original )
+
+```
+
+Now lets check to see how many sequences were removed
+
+```{r meta filtering count}
+
+pre <- length(yam_meta$Isolate_Id)
+post <- length(yam_meta_orig$Isolate_Id)
+total_rm <- pre - post
+
+paste("A total of", total_rm, "isolates were removed")
+paste("A total of", post, "isolates remain")
+
+
+```
+
+So for the Yamagata dataset, it looks like a total of 2832 isolates were removed post filtering for only original sequences leaving us with ***4420*** isolates to work with. 
+
+* For now, this is as much as we are going to do with the meta data. We can come back later to look at distributions of various isolates features (year, origin, etc.) but for now, we will focus on the alignment. 
+
+* ***NOTE*** We will analyze all of these sequences in subsequent analysis despite that many will be 100% identical at some segments. 
+
+## 3. Extracting sequences from large fasta based on filtered list
+
+So now that we have a filtered list outlinine all sequences of clinical origin (not passaged through cells), we can move on to extracting these 4420 Yamagata genomes from our massive master fasta file containing all the segments of all the isolates. Note: Each of these isolates have an ***"Isolate_ID"*** which identifies the sample as well as a ***Segment IDs***. 
+
+First, we need to make a list of these isolates and export it to .csv
+
+```{r}
+
+orig_list <- as.data.frame(yam_meta_orig$Isolate_Id)
+write_csv(orig_list, file = "./IBV_YAMAGATA_FULL-Seq_Database-ALL/IBV_Yam_filtered_database/orig_seq_list.csv", col_names = FALSE)
+
+```
+
+Next we need to extract these sequences. We can use ```seqkit``` by Hu et al downloadable [here](https://github.com/shenwei356/seqkit)
+```{bash seqkit extract from list}
+
+seqkit 
+
+```
+
+
+
